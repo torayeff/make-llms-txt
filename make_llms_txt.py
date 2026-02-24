@@ -122,6 +122,38 @@ def clean_markdown(text: str) -> str:
     return text.strip()
 
 
+def heading_to_slug(heading: str) -> str:
+    """Convert a markdown heading to a GFM-style anchor slug."""
+    slug = heading.lower().strip()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[\s]+", "-", slug)
+    return slug.strip("-")
+
+
+def fix_internal_links(text: str, filename_to_slug: dict[str, str]) -> str:
+    """Rewrite inter-file .md links to in-document anchor links."""
+
+    def _replace(m: re.Match[str]) -> str:
+        link_text = m.group(1)
+        target = m.group(2)
+
+        if target.startswith(("http://", "https://", "mailto:")):
+            return m.group(0)
+
+        if ".md#" in target:
+            fragment = target.split("#", 1)[1]
+            return f"[{link_text}](#{fragment})"
+
+        if target.endswith(".md"):
+            slug = filename_to_slug.get(target)
+            if slug:
+                return f"[{link_text}](#{slug})"
+
+        return m.group(0)
+
+    return re.sub(r"\[([^\]]*)\]\(([^)]+)\)", _replace, text)
+
+
 def run_sphinx_build(docs_dir: Path, build_dir: Path) -> bool:
     """Run sphinx-build with the markdown builder."""
     print(f"Building markdown docs into {build_dir} ...")
@@ -140,6 +172,14 @@ def run_sphinx_build(docs_dir: Path, build_dir: Path) -> bool:
     return True
 
 
+def _first_heading(content: str) -> str | None:
+    """Return the text of the first H1 heading in *content*, or None."""
+    for line in content.splitlines():
+        if line.startswith("# "):
+            return line.removeprefix("# ").strip()
+    return None
+
+
 def concatenate(
     build_dir: Path,
     pages: list[str],
@@ -149,6 +189,7 @@ def concatenate(
     """Read and concatenate markdown files in order."""
     parts: list[str] = []
     missing: list[str] = []
+    filename_to_slug: dict[str, str] = {}
 
     for i, page in enumerate(pages):
         md_path = build_dir / f"{page}.md"
@@ -159,6 +200,10 @@ def concatenate(
         content = clean_markdown(md_path.read_text(encoding="utf-8"))
         if not content:
             continue
+
+        heading = _first_heading(content)
+        if heading:
+            filename_to_slug[f"{Path(page).name}.md"] = heading_to_slug(heading)
 
         separator = "=" * 72
         if numbered:
@@ -171,7 +216,8 @@ def concatenate(
     if missing:
         print(f"Warning: missing pages: {', '.join(missing)}", file=sys.stderr)
 
-    return "\n\n\n".join(parts) + "\n"
+    result = "\n\n\n".join(parts) + "\n"
+    return fix_internal_links(result, filename_to_slug)
 
 
 def main() -> None:
