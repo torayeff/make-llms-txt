@@ -1,4 +1,4 @@
-# make_llms_txt
+# make-llms-txt
 
 Build a single LLM-friendly markdown file from Sphinx documentation.
 
