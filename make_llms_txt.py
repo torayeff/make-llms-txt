@@ -167,8 +167,11 @@ def run_sphinx_build(docs_dir: Path, build_dir: Path) -> bool:
     print(f"Building markdown docs into {build_dir} ...")
     result = subprocess.run(
         [
-            sys.executable, "-m", "sphinx",
-            "-b", "markdown",
+            sys.executable,
+            "-m",
+            "sphinx",
+            "-b",
+            "markdown",
             str(docs_dir),
             str(build_dir),
         ],
@@ -249,7 +252,8 @@ def main() -> None:
         help="Path to the Sphinx docs source directory (default: current dir)",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         default=None,
         help="Output file path (default: <docs_dir>/_build/llms.txt)",
