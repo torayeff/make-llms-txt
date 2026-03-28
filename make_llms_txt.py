@@ -21,6 +21,10 @@ IMAGE_LINK_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)\s*\n?")
 RAW_HTML_BLOCK_RE = re.compile(
     r"<(script|model-viewer|style)[^>]*>.*?</\1>\s*\n?", re.DOTALL
 )
+HTML_A_TAG_RE = re.compile(r"<a\b[^>]*>(.*?)</a>", re.DOTALL)
+HTML_A_SELF_CLOSE_RE = re.compile(r"<a\b[^>]*/>\s*")
+HTML_IMG_RE = re.compile(r"<img\b[^>]*/?\>\s*")
+HTML_BR_RE = re.compile(r"<br\s*/?\>\s*")
 
 TOCTREE_DIRECTIVE_RE = re.compile(r"^\.\.\s+toctree::", re.MULTILINE)
 TOCTREE_OPTION_RE = re.compile(r"^\s+:[^:]+:.*$")
@@ -115,9 +119,13 @@ def collect_pages(
 
 
 def clean_markdown(text: str) -> str:
-    """Remove image links and raw HTML blocks that are useless for LLMs."""
+    """Remove image links, raw HTML blocks, and leftover HTML tags."""
     text = IMAGE_LINK_RE.sub("", text)
     text = RAW_HTML_BLOCK_RE.sub("", text)
+    text = HTML_A_TAG_RE.sub(r"\1", text)
+    text = HTML_A_SELF_CLOSE_RE.sub("", text)
+    text = HTML_IMG_RE.sub("", text)
+    text = HTML_BR_RE.sub("", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -185,11 +193,15 @@ def concatenate(
     pages: list[str],
     *,
     numbered: bool = False,
+    sections_dir: Path | None = None,
 ) -> str:
     """Read and concatenate markdown files in order."""
     parts: list[str] = []
     missing: list[str] = []
     filename_to_slug: dict[str, str] = {}
+
+    if sections_dir is not None:
+        sections_dir.mkdir(parents=True, exist_ok=True)
 
     for i, page in enumerate(pages):
         md_path = build_dir / f"{page}.md"
@@ -204,6 +216,11 @@ def concatenate(
         heading = _first_heading(content)
         if heading:
             filename_to_slug[f"{Path(page).name}.md"] = heading_to_slug(heading)
+
+        if sections_dir is not None:
+            page_slug = page.replace("/", "_")
+            section_path = sections_dir / f"{i:02d}-{page_slug}.txt"
+            section_path.write_text(content + "\n", encoding="utf-8")
 
         separator = "=" * 72
         if numbered:
@@ -247,6 +264,12 @@ def main() -> None:
         action="store_true",
         help="Add section numbering to the output",
     )
+    parser.add_argument(
+        "--sections-dir",
+        type=Path,
+        default=None,
+        help="Directory to write individual section files (e.g., 00-index.txt)",
+    )
     args = parser.parse_args()
 
     docs_dir = args.docs_dir.resolve()
@@ -265,13 +288,22 @@ def main() -> None:
     pages = collect_pages(docs_dir, master_doc)
     print(f"Discovered {len(pages)} pages from toctree (root: {master_doc})")
 
-    result = concatenate(build_dir, pages, numbered=args.numbered)
+    result = concatenate(
+        build_dir,
+        pages,
+        numbered=args.numbered,
+        sections_dir=args.sections_dir,
+    )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(result, encoding="utf-8")
 
     size_kb = output.stat().st_size / 1024
     print(f"Wrote {output} ({size_kb:.0f} KB, {len(pages)} sections)")
+
+    if args.sections_dir is not None:
+        n_files = len(list(args.sections_dir.glob("*.txt")))
+        print(f"Wrote {n_files} section files to {args.sections_dir}")
 
 
 if __name__ == "__main__":

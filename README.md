@@ -42,6 +42,9 @@ python make_llms_txt.py --numbered
 
 # Skip sphinx-build and just re-concatenate existing markdown
 python make_llms_txt.py --skip-build
+
+# Write each section to its own file (00-index.txt, 01-introduction.txt, ...)
+python make_llms_txt.py --sections-dir ./sections
 ```
 
 Output is written to `<docs_dir>/_build/llms.txt` by default.
@@ -51,7 +54,7 @@ Output is written to `<docs_dir>/_build/llms.txt` by default.
 1. Detects the root document from `conf.py` (`master_doc` / `root_doc`, defaults to `index`)
 2. Parses `.. toctree::` directives recursively to discover all pages in order
 3. Runs `sphinx-build -b markdown` to render `.rst` sources into `.md` (resolving all autodoc directives)
-4. Strips image links (`![](...)`) and raw HTML blocks that are meaningless to LLMs
+4. Strips image links (`![](...)`) , raw HTML blocks, and leftover HTML tags (`<a>`, `<img>`, `<br>`) that are meaningless to LLMs
 5. Concatenates everything into a single file with section separators
 
 ## What works
@@ -73,3 +76,5 @@ Output is written to `<docs_dir>/_build/llms.txt` by default.
 Each page becomes a section separated by a line of `=` characters. Code blocks
 retain triple-backtick fencing with language tags. With `--numbered`, each
 separator includes a section index and source page name for easy reference.
+With `--sections-dir`, each section is also written as a standalone file
+named `{index:02d}-{page}.txt`.
